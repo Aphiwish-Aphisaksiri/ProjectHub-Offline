@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProjectHub — Offline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --primary:     #061E29;
+      --secondary:   #1D546D;
+      --tertiary:    #5F9598;
+      --offwhite:    #F0F6FC;
+      --lightgrey:   #BABABA;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--primary);
+      color: var(--offwhite);
+      font-family: 'Syne', sans-serif;
+      overflow: hidden;
+      cursor: none;
+    }
+
+    /* Custom cursor */
+    #cursor {
+      position: fixed;
+      width: 8px; height: 8px;
+      background: var(--tertiary);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      transition: transform 0.1s ease, width 0.3s ease, height 0.3s ease, opacity 0.3s ease;
+    }
+    #cursor-ring {
+      position: fixed;
+      width: 32px; height: 32px;
+      border: 1px solid rgba(95,149,152,0.4);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(-50%, -50%);
+      transition: transform 0.12s ease, width 0.3s ease, height 0.3s ease;
+    }
+
+    /* Canvas */
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%; height: 100%;
+    }
+
+    /* Vignette */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center,
+        transparent 40%,
+        rgba(6,30,41,0.6) 75%,
+        rgba(6,30,41,0.95) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* UI layer */
+    .ui {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      pointer-events: none;
+    }
+
+    .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--tertiary);
+      border: 1px solid rgba(95,149,152,0.3);
+      padding: 5px 14px;
+      border-radius: 100px;
+      background: rgba(95,149,152,0.06);
+      margin-bottom: 28px;
+      opacity: 0;
+      transform: translateY(12px);
+      animation: fadeUp 0.8s ease 0.2s forwards;
+    }
+
+    h1 {
+      font-size: clamp(52px, 8vw, 96px);
+      font-weight: 800;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      text-align: center;
+      color: var(--offwhite);
+      opacity: 0;
+      transform: translateY(16px);
+      animation: fadeUp 0.9s ease 0.35s forwards;
+    }
+
+    h1 span {
+      color: var(--tertiary);
+    }
+
+    .subtitle {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(12px, 1.4vw, 15px);
+      font-weight: 300;
+      color: var(--lightgrey);
+      text-align: center;
+      margin-top: 24px;
+      letter-spacing: 0.01em;
+      line-height: 1.7;
+      max-width: 420px;
+      opacity: 0;
+      transform: translateY(12px);
+      animation: fadeUp 0.9s ease 0.5s forwards;
+    }
+
+    .divider {
+      width: 1px;
+      height: 48px;
+      background: linear-gradient(to bottom, transparent, var(--tertiary), transparent);
+      margin: 36px 0;
+      opacity: 0;
+      animation: fadeUp 0.9s ease 0.65s forwards;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      animation: fadeUp 0.9s ease 0.75s forwards;
+    }
+
+    .dot {
+      width: 7px; height: 7px;
+      background: #8F0A0A;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(143,10,10,0.8);
+      animation: pulse-dot 2.5s ease-in-out infinite;
+    }
+
+    .status-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--lightgrey);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .footer {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: rgba(186,186,186,0.3);
+      letter-spacing: 0.1em;
+      z-index: 10;
+      opacity: 0;
+      animation: fadeUp 1s ease 1s forwards;
+      white-space: nowrap;
+    }
+
+    /* Floating coord display */
+    #coords {
+      position: fixed;
+      bottom: 28px;
+      right: 32px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: rgba(95,149,152,0.35);
+      letter-spacing: 0.08em;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.75); }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="cursor"></div>
+  <div id="cursor-ring"></div>
+
+  <canvas id="c"></canvas>
+  <div class="vignette"></div>
+
+  <div class="ui">
+    <div class="badge">projecthub.aphiwish.com</div>
+    <h1>Currently<br/><span>Offline</span></h1>
+    <p class="subtitle">
+      ProjectHub runs on a personal machine<br/>
+      with a locally hosted AI. Check back soon.
+    </p>
+    <div class="divider"></div>
+    <div class="status-row">
+      <div class="dot"></div>
+      <span class="status-text">Host machine is offline</span>
+    </div>
+  </div>
+
+  <div class="footer">aphiwish.com &nbsp;·&nbsp; built with local LLM + pgvector</div>
+  <div id="coords">0, 0</div>
+
+<script>
+// ─── Config ─────────────────────────────────────────────────────────────────
+const CFG = {
+  nodeCount:   90,
+  maxDist:     180,
+  nodeSpeed:   0.28,
+  tiltAmount:  18,       // degrees max tilt
+  tiltSmooth:  0.055,
+  nodeR:       2.2,
+  colors: {
+    bg:         '#061E29',
+    node:       '#5F9598',
+    nodeDim:    '#1D546D',
+    edge:       '#1D546D',
+    edgeHover:  '#5F9598',
+  }
+};
+
+// ─── State ───────────────────────────────────────────────────────────────────
+const canvas  = document.getElementById('c');
+const ctx     = canvas.getContext('2d');
+const cursor  = document.getElementById('cursor');
+const ring    = document.getElementById('cursor-ring');
+const coords  = document.getElementById('coords');
+
+let W, H, cx, cy;
+let mouse     = { x: 0, y: 0, nx: 0, ny: 0 }; // nx/ny = normalised -1..1
+let tilt      = { x: 0, y: 0, tx: 0, ty: 0 };  // current / target
+let nodes     = [];
+let raf;
+
+// ─── Resize ──────────────────────────────────────────────────────────────────
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  cx = W / 2; cy = H / 2;
+}
+window.addEventListener('resize', () => { resize(); initNodes(); });
+resize();
+
+// ─── Nodes ───────────────────────────────────────────────────────────────────
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+function initNodes() {
+  nodes = [];
+  for (let i = 0; i < CFG.nodeCount; i++) {
+    nodes.push({
+      x:  rand(0, W),
+      y:  rand(0, H),
+      z:  rand(0.3, 1),      // depth 0=far 1=near
+      vx: rand(-CFG.nodeSpeed, CFG.nodeSpeed) * (Math.random() > 0.5 ? 1 : -1),
+      vy: rand(-CFG.nodeSpeed, CFG.nodeSpeed) * (Math.random() > 0.5 ? 1 : -1),
+      r:  rand(1.2, CFG.nodeR),
+    });
+  }
+}
+initNodes();
+
+// ─── Mouse ───────────────────────────────────────────────────────────────────
+window.addEventListener('mousemove', e => {
+  mouse.x  = e.clientX;
+  mouse.y  = e.clientY;
+  mouse.nx = (e.clientX / W) * 2 - 1;   // -1 .. 1
+  mouse.ny = (e.clientY / H) * 2 - 1;
+
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top  = e.clientY + 'px';
+  ring.style.left   = e.clientX + 'px';
+  ring.style.top    = e.clientY + 'px';
+
+  coords.textContent = `${e.clientX}, ${e.clientY}`;
+});
+
+// ─── Draw helpers ────────────────────────────────────────────────────────────
+function project(node) {
+  // Apply perspective tilt: offset x/y based on tilt and node depth
+  const px = cx + (node.x - cx) * node.z + tilt.x * node.z * 60;
+  const py = cy + (node.y - cy) * node.z + tilt.y * node.z * 60;
+  return { px, py, scale: 0.5 + node.z * 0.5 };
+}
+
+function drawEdge(a, b, dist, maxDist) {
+  const { px: ax, py: ay } = project(a);
+  const { px: bx, py: by } = project(b);
+
+  // proximity to mouse
+  const mx = (ax + bx) / 2, my = (ay + by) / 2;
+  const md = Math.hypot(mx - mouse.x, my - mouse.y);
+  const hover = Math.max(0, 1 - md / 200);
+
+  const alpha = (1 - dist / maxDist) * 0.25 * ((a.z + b.z) / 2) + hover * 0.45;
+  const depth = (a.z + b.z) / 2;
+
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(bx, by);
+
+  // blend edge color toward hover highlight
+  const r1 = 29,  g1 = 84,  b1 = 109;   // secondary
+  const r2 = 95,  g2 = 149, b2 = 152;   // tertiary
+  const ri = Math.round(r1 + (r2 - r1) * hover);
+  const gi = Math.round(g1 + (g2 - g1) * hover);
+  const bi = Math.round(b1 + (b2 - b1) * hover);
+
+  ctx.strokeStyle = `rgba(${ri},${gi},${bi},${alpha})`;
+  ctx.lineWidth   = depth * 0.9 + hover * 0.8;
+  ctx.stroke();
+}
+
+function drawNode(node) {
+  const { px, py, scale } = project(node);
+  const md     = Math.hypot(px - mouse.x, py - mouse.y);
+  const hover  = Math.max(0, 1 - md / 90);
+  const radius = node.r * scale + hover * 2.5;
+  const alpha  = 0.35 + node.z * 0.55 + hover * 0.4;
+
+  // glow for nearby nodes
+  if (hover > 0.1) {
+    const glow = ctx.createRadialGradient(px, py, 0, px, py, radius * 5);
+    glow.addColorStop(0, `rgba(95,149,152,${hover * 0.25})`);
+    glow.addColorStop(1, `rgba(95,149,152,0)`);
+    ctx.beginPath();
+    ctx.arc(px, py, radius * 5, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.arc(px, py, radius, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(95,149,152,${alpha})`;
+  ctx.fill();
+}
+
+// ─── Main loop ───────────────────────────────────────────────────────────────
+function tick() {
+  // Smooth tilt toward mouse
+  tilt.tx =  mouse.nx * (CFG.tiltAmount / 90);
+  tilt.ty = -mouse.ny * (CFG.tiltAmount / 90);
+  tilt.x += (tilt.tx - tilt.x) * CFG.tiltSmooth;
+  tilt.y += (tilt.ty - tilt.y) * CFG.tiltSmooth;
+
+  // Clear
+  ctx.clearRect(0, 0, W, H);
+
+  // Move nodes
+  for (const n of nodes) {
+    n.x += n.vx;
+    n.y += n.vy;
+    if (n.x < -50) n.x = W + 50;
+    if (n.x > W + 50) n.x = -50;
+    if (n.y < -50) n.y = H + 50;
+    if (n.y > H + 50) n.y = -50;
+  }
+
+  // Sort by depth (far → near)
+  const sorted = [...nodes].sort((a, b) => a.z - b.z);
+
+  // Draw edges
+  for (let i = 0; i < sorted.length; i++) {
+    for (let j = i + 1; j < sorted.length; j++) {
+      const { px: ax, py: ay } = project(sorted[i]);
+      const { px: bx, py: by } = project(sorted[j]);
+      const d = Math.hypot(ax - bx, ay - by);
+      if (d < CFG.maxDist) drawEdge(sorted[i], sorted[j], d, CFG.maxDist);
+    }
+  }
+
+  // Draw nodes
+  for (const n of sorted) drawNode(n);
+
+  raf = requestAnimationFrame(tick);
+}
+
+tick();
+</script>
+</body>
+</html>
